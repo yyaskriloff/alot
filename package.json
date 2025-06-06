@@ -7,18 +7,36 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node src/server.js",
+    "dev": "tsx src/server.js",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@auth/express": "^0.10.1",
+    "@hono/node-server": "^1.14.3",
     "@kinde-oss/kinde-node-express": "^1.6.0",
-    "express": "^5.1.0"
+    "@tailwindcss/cli": "^4.1.8",
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.44.2",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "hono": "^4.7.11",
+    "pg": "^8.16.0",
+    "ssh2": "^1.16.0",
+    "tailwindcss": "^4.1.8"
   },
   "devDependencies": {
+    "@types/express": "^5.0.2",
     "@types/node": "^22.15.21",
+    "@types/pg": "^8.15.4",
+    "@types/ssh2": "^1.15.5",
+    "drizzle-kit": "^0.31.1",
+    "nodemon": "^3.1.10",
+    "prettier": "3.5.3",
     "prisma": "^6.8.2",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }
