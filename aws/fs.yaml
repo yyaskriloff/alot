@@ -1,0 +1,62 @@
+# create a efs
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for creating an Amazon EFS file system'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where the EFS mount target will be created
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID where the EFS mount target will be created
+
+  FileSystemName:
+    Type: String
+    Description: Name of the EFS file system
+    Default: MyEFSFileSystem
+
+Resources:
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS mount target
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+          Description: Allow NFS traffic
+
+  EfsFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value: !Ref FileSystemName
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      Encrypted: true
+
+  EfsMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EfsFileSystem
+      SubnetId: !Ref SubnetId
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+Outputs:
+  FileSystemId:
+    Description: ID of the EFS file system
+    Value: !Ref EfsFileSystem
+
+  MountTargetId:
+    Description: ID of the EFS mount target
+    Value: !Ref EfsMountTarget
+
+  SecurityGroupId:
+    Description: ID of the security group for the mount target
+    Value: !Ref EfsSecurityGroup
