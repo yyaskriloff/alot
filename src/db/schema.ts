@@ -1,10 +1,10 @@
-import { integer, pgTable, varchar, pgEnum, text, timestamp, primaryKey } from 'drizzle-orm/pg-core'
+import { integer, pgTable, varchar, pgEnum, text, timestamp, bigserial } from 'drizzle-orm/pg-core'
 
 const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
 const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
 
 export const usersTable = pgTable('users', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  id: integer().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull().unique()
 })
@@ -68,7 +68,7 @@ export const playlistUploadsTable = pgTable('playlist_uploads', {
 })
 
 export const directoriesTable = pgTable('directories', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  id: bigserial({ mode: 'number' }).primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   path: text().unique(),
   ownerId: integer()
@@ -78,6 +78,7 @@ export const directoriesTable = pgTable('directories', {
 })
 
 export const filesTable = pgTable('files', {
+  id: bigserial({ mode: 'number' }).primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   key: varchar({ length: 64 }).notNull().unique(),
   size: integer().notNull(),
