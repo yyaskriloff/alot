@@ -19,7 +19,7 @@ import { unionAll } from 'drizzle-orm/pg-core'
 // on delete, db then file confirmation
 
 // pointer to where the application is in the file system
-const pointer = (nullable: 'nullable' | 'required') =>
+const cwd = (nullable: 'nullable' | 'required') =>
   nullable === 'nullable'
     ? z.coerce
         .number()
@@ -48,25 +48,25 @@ driveRoute.get(
   validator(
     'query',
     z.object({
-      pointer: pointer('nullable'),
+      cwd: cwd('nullable'),
       sort: z.enum(['name', 'size', 'updated', 'created']).optional().default('name'),
       type: z.enum(['file', 'dir']).optional(),
       reverse: z.boolean().optional().default(false)
     })
   ),
   async c => {
-    const { pointer, sort } = c.req.valid('query')
+    const { cwd, sort } = c.req.valid('query')
     // get all files and folders in the path in one select statement
 
     const files = db
       .select()
       .from(filesTable)
-      .where(pointer ? eq(filesTable.parentFolder, pointer) : isNull(filesTable.parentFolder))
+      .where(cwd ? eq(filesTable.parentFolder, cwd) : isNull(filesTable.parentFolder))
 
     const folders = db
       .select()
       .from(foldersTable)
-      .where(pointer ? eq(foldersTable.parentId, pointer) : isNull(foldersTable.parentId))
+      .where(cwd ? eq(foldersTable.parentId, cwd) : isNull(foldersTable.parentId))
 
     const filesAndFolders = Promise.all([files, folders]).then(([files, folders]) => {
       return [...files, ...folders].sort((a, b) => {
@@ -93,15 +93,15 @@ driveRoute.get(
 driveRoute.post(
   '/mkdir',
   validator('json', z.object({ name: z.string().min(1).max(255) })),
-  validator('query', z.object({ pointer: pointer('nullable') })),
+  validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
     const { name } = c.req.valid('json')
-    const { pointer } = c.req.valid('query')
+    const { cwd } = c.req.valid('query')
 
     await db.insert(foldersTable).values({
       name,
       ownerId: 1,
-      parentId: pointer
+      parentId: cwd
     })
 
     return c.body(null, 201)
@@ -118,12 +118,12 @@ driveRoute.delete(
       file: z.coerce.number().optional()
     })
   ),
-  validator('query', z.object({ pointer: pointer('nullable') })),
+  validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
     const { recursive, version, file } = c.req.valid('json')
-    const { pointer } = c.req.valid('query')
+    const { cwd } = c.req.valid('query')
 
-    if (!pointer) {
+    if (!cwd) {
       return c.json({ error: 'pointer is required' }, 400)
     }
 
@@ -141,8 +141,8 @@ driveRoute.delete(
 
     // check if its empty
     const isEmpty = await unionAll(
-      db.select({ id: filesTable.id }).from(filesTable).where(eq(filesTable.parentFolder, pointer)).limit(1),
-      db.select({ id: foldersTable.id }).from(foldersTable).where(eq(foldersTable.parentId, pointer)).limit(1)
+      db.select({ id: filesTable.id }).from(filesTable).where(eq(filesTable.parentFolder, cwd)).limit(1),
+      db.select({ id: foldersTable.id }).from(foldersTable).where(eq(foldersTable.parentId, cwd)).limit(1)
     ).then(r => r.length === 0)
 
     if (!isEmpty && !recursive) {
@@ -152,7 +152,7 @@ driveRoute.delete(
     if (recursive) {
       await db.execute(sql`
         WITH RECURSIVE subfolders AS (
-          SELECT id FROM ${foldersTable} WHERE id = ${pointer}
+          SELECT id FROM ${foldersTable} WHERE id = ${cwd}
           UNION ALL
           SELECT f.id
           FROM ${foldersTable} f
@@ -166,7 +166,7 @@ driveRoute.delete(
         WHERE id IN (SELECT id FROM subfolders)
       `)
     } else {
-      await db.delete(foldersTable).where(eq(foldersTable.id, pointer))
+      await db.delete(foldersTable).where(eq(foldersTable.id, cwd))
     }
 
     return c.body(null, 204)
@@ -176,17 +176,17 @@ driveRoute.delete(
 driveRoute.post(
   '/touch',
   validator('json', z.object({ name: z.string().min(1).max(255) })),
-  validator('query', z.object({ pointer: pointer('nullable') })),
+  validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
     const { name } = c.req.valid('json')
-    const { pointer } = c.req.valid('query')
+    const { cwd } = c.req.valid('query')
 
     await db.insert(filesTable).values({
       name,
       type: 'mp3',
       key: crypto.randomUUID(),
       size: 0,
-      parentFolder: pointer,
+      parentFolder: cwd,
       ownerId: 1
     })
 
@@ -213,11 +213,11 @@ driveRoute.get(
     'query',
     z.object({
       file: z.coerce.number(),
-      pointer: pointer('nullable')
+      cwd: cwd('nullable')
     })
   ),
   async c => {
-    const { file, pointer } = c.req.valid('query')
+    const { file, cwd } = c.req.valid('query')
 
     if (file) {
       const fileStats = await db
@@ -236,8 +236,8 @@ driveRoute.get(
         size: sum(filesTable.size)
       })
       .from(filesTable)
-      .innerJoin(foldersTable, pointer ? eq(filesTable.parentFolder, foldersTable.id) : isNull(filesTable.parentFolder))
-      .where(pointer ? eq(foldersTable.id, pointer) : isNull(foldersTable.id))
+      .innerJoin(foldersTable, cwd ? eq(filesTable.parentFolder, foldersTable.id) : isNull(filesTable.parentFolder))
+      .where(cwd ? eq(foldersTable.id, cwd) : isNull(foldersTable.id))
 
     return c.json(folderStats)
   }
