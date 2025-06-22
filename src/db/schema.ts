@@ -1,4 +1,4 @@
-import { integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/pg-core'
+import { integer, pgTable, varchar, text, timestamp, serial, uuid } from 'drizzle-orm/pg-core'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
 // const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
@@ -21,12 +21,12 @@ export const orgsTable = pgTable('organizations', {
 })
 
 export const foldersTable = pgTable('folders', {
-  id: serial().primaryKey(),
+  id: uuid().defaultRandom().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   ownerId: integer()
     .notNull()
     .references(() => usersTable.id, { onDelete: 'cascade' }),
-  parentId: integer(),
+  parentId: uuid(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
     .$onUpdate(() => new Date()),
@@ -34,12 +34,12 @@ export const foldersTable = pgTable('folders', {
 })
 
 export const filesTable = pgTable('files', {
-  id: serial().primaryKey(),
+  id: uuid().defaultRandom().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   key: varchar({ length: 64 }).notNull().unique(),
   size: integer().notNull(),
   type: varchar({ length: 64 }).notNull(),
-  parentFolder: integer().references(() => foldersTable.id, { onDelete: 'cascade' }),
+  parentFolder: uuid().references(() => foldersTable.id, { onDelete: 'cascade' }),
   ownerId: integer()
     .references(() => usersTable.id, { onDelete: 'cascade' })
     .notNull(),

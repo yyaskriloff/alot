@@ -21,11 +21,11 @@ import { unionAll } from 'drizzle-orm/pg-core'
 // pointer to where the application is in the file system
 const cwd = (nullable: 'nullable' | 'required') =>
   nullable === 'nullable'
-    ? z.coerce
-        .number()
+    ? z
+        .string()
         .optional()
         .transform(val => val ?? null)
-    : z.coerce.number()
+    : z.string()
 
 // Function to create S3Client for a specific bucket
 // const s3Client = new S3Client({
@@ -115,7 +115,7 @@ driveRoute.delete(
     z.object({
       recursive: z.boolean().optional().default(false),
       version: z.coerce.number().optional(),
-      file: z.coerce.number().optional()
+      file: z.string().optional()
     })
   ),
   validator('query', z.object({ cwd: cwd('nullable') })),
@@ -199,7 +199,7 @@ driveRoute.get(
   validator(
     'query',
     z.object({
-      file: z.coerce.number().optional()
+      file: z.string().optional()
     })
   ),
   async c => {
@@ -212,7 +212,7 @@ driveRoute.get(
   validator(
     'query',
     z.object({
-      file: z.coerce.number(),
+      file: z.string(),
       cwd: cwd('nullable')
     })
   ),
