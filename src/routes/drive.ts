@@ -10,7 +10,7 @@ import { Hono } from 'hono'
 // import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import db from '../db'
 import { filesTable, foldersTable } from '../db/schema'
-import { eq, isNull, sql } from 'drizzle-orm'
+import { eq, isNull, sql, count, sum } from 'drizzle-orm'
 import { z } from 'zod'
 import { zValidator as validator } from '@hono/zod-validator'
 import { unionAll } from 'drizzle-orm/pg-core'
@@ -48,25 +48,25 @@ driveRoute.get(
   validator(
     'query',
     z.object({
-      path: pointer('nullable'),
+      pointer: pointer('nullable'),
       sort: z.enum(['name', 'size', 'updated', 'created']).optional().default('name'),
       type: z.enum(['file', 'dir']).optional(),
       reverse: z.boolean().optional().default(false)
     })
   ),
   async c => {
-    const { path, sort } = c.req.valid('query')
+    const { pointer, sort } = c.req.valid('query')
     // get all files and folders in the path in one select statement
 
     const files = db
       .select()
       .from(filesTable)
-      .where(path ? eq(filesTable.parentFolder, path) : isNull(filesTable.parentFolder))
+      .where(pointer ? eq(filesTable.parentFolder, pointer) : isNull(filesTable.parentFolder))
 
     const folders = db
       .select()
       .from(foldersTable)
-      .where(path ? eq(foldersTable.parentId, path) : isNull(foldersTable.parentId))
+      .where(pointer ? eq(foldersTable.parentId, pointer) : isNull(foldersTable.parentId))
 
     const filesAndFolders = Promise.all([files, folders]).then(([files, folders]) => {
       return [...files, ...folders].sort((a, b) => {
@@ -186,25 +186,83 @@ driveRoute.post(
       type: 'mp3',
       key: crypto.randomUUID(),
       size: 0,
-      parentFolder: pointer
+      parentFolder: pointer,
+      ownerId: 1
     })
+
+    return c.body(null, 201)
   }
 )
 
-driveRoute.get('/download', async c => {
-  
-})
+driveRoute.get(
+  '/download',
+  validator(
+    'query',
+    z.object({
+      file: z.coerce.number().optional()
+    })
+  ),
+  async c => {
+    //  redirect to the filed
+  }
+)
 
-driveRoute.get('/stat', async c => {})
+driveRoute.get(
+  '/stat',
+  validator(
+    'query',
+    z.object({
+      file: z.coerce.number(),
+      pointer: pointer('nullable')
+    })
+  ),
+  async c => {
+    const { file, pointer } = c.req.valid('query')
+
+    if (file) {
+      const fileStats = await db
+        .select({
+          size: filesTable.size,
+          type: filesTable.type
+        })
+        .from(filesTable)
+        .where(eq(filesTable.id, file))
+
+      return c.json(fileStats)
+    }
+    const folderStats = await db
+      .select({
+        files: count(filesTable.id),
+        size: sum(filesTable.size)
+      })
+      .from(filesTable)
+      .innerJoin(foldersTable, pointer ? eq(filesTable.parentFolder, foldersTable.id) : isNull(filesTable.parentFolder))
+      .where(pointer ? eq(foldersTable.id, pointer) : isNull(foldersTable.id))
+
+    return c.json(folderStats)
+  }
+)
 
 driveRoute.get('/storage', async c => {
   // Here you would typically fetch storage usage from a database or storage
-  const storageUsage = {
-    total: 1000000, // Total storage in bytes
-    used: 500000, // Used storage in bytes
-    free: 500000 // Free storage in bytes
-  }
-  return c.json(storageUsage)
+
+  const usedStorage = await db
+    .select({
+      used: sum(filesTable.size)
+    })
+    .from(filesTable)
+    .where(eq(filesTable.ownerId, 1))
+    .then(([{ used }]) => {
+      return parseInt(used || '0')
+    })
+  // Calculate total storage in 10GB increments, starting at 10GB
+  const totalStorage = Math.ceil((usedStorage || 1) / 10000000000) * 10000000000
+
+  return c.json({
+    total: totalStorage, // Total storage in bytes
+    used: usedStorage, // Used storage in bytes
+    free: totalStorage - usedStorage
+  })
 })
 
 export default driveRoute
