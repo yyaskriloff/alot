@@ -1,7 +1,7 @@
-import { integer, pgTable, varchar, pgEnum, text, timestamp, bigserial } from 'drizzle-orm/pg-core'
+import { integer, pgTable, varchar, pgEnum, text, timestamp, serial, bigint } from 'drizzle-orm/pg-core'
 
-const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
-const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
+// const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
+// const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
 
 export const usersTable = pgTable('users', {
   id: integer().primaryKey(),
@@ -20,70 +20,28 @@ export const orgsTable = pgTable('organizations', {
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
 
-export const profilesTable = pgTable('profiles', {
-  title: titleEnum(),
-  firstName: varchar({ length: 255 }).notNull(),
-  lastName: varchar({ length: 255 }).notNull(),
-  bio: text().notNull(),
-  dob: timestamp({ mode: 'date' }).notNull(),
-  dod: timestamp({ mode: 'date' }),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
-
-// this is archived files
-export const uploadsTable = pgTable('uploads', {
-  title: varchar({ length: 255 }).notNull(),
-  description: text().notNull(),
-  key: varchar({ length: 64 }).notNull().unique(),
-  size: integer().notNull(),
-  type: varchar({ length: 64 }).notNull(),
-  status: status().notNull().default('waiting'),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
-
-// archived playlists
-export const playlistsTable = pgTable('playlists', {
-  title: varchar({ length: 255 }).notNull(),
-  description: text().notNull(),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
-
-// archived playlist uploads
-export const playlistUploadsTable = pgTable('playlist_uploads', {
-  playlistId: integer().notNull(),
-  uploadId: integer().notNull(),
-  position: integer().notNull().default(0)
-})
-
-export const directoriesTable = pgTable('directories', {
-  id: bigserial({ mode: 'number' }).primaryKey(),
+export const foldersTable = pgTable('folders', {
+  id: serial().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
-  path: text().unique(),
   ownerId: integer()
     .notNull()
     .references(() => usersTable.id, { onDelete: 'cascade' }),
+  parentId: integer(),
+  updatedAt: timestamp({ mode: 'date' })
+    .notNull()
+    .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
 
 export const filesTable = pgTable('files', {
-  id: bigserial({ mode: 'number' }).primaryKey(),
+  id: serial().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   key: varchar({ length: 64 }).notNull().unique(),
   size: integer().notNull(),
   type: varchar({ length: 64 }).notNull(),
-  parentFolder: integer()
+  parentFolder: integer().references(() => foldersTable.id, { onDelete: 'cascade' }),
+  updatedAt: timestamp({ mode: 'date' })
     .notNull()
-    .references(() => directoriesTable.id, { onDelete: 'cascade' })
+    .$onUpdate(() => new Date()),
+  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
