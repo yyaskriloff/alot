@@ -1,16 +1,16 @@
 import { Hono } from 'hono'
-// import {
-//   S3Client,
-//   ListObjectsV2Command,
-//   GetObjectCommand,
-//   DeleteObjectCommand,
-//   PutObjectCommand,
-//   ListObjectVersionsCommand
-// } from '@aws-sdk/client-s3'
-// import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  PutObjectCommand,
+  ListObjectVersionsCommand
+} from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import db from '../db'
 import { filesTable, foldersTable } from '../db/schema'
-import { eq, isNull, sql, count, sum } from 'drizzle-orm'
+import { eq, isNull, sql, count, sum, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { zValidator as validator } from '@hono/zod-validator'
 import { unionAll } from 'drizzle-orm/pg-core'
@@ -27,16 +27,15 @@ const cwd = (nullable: 'nullable' | 'required') =>
         .transform(val => val ?? null)
     : z.string()
 
-// Function to create S3Client for a specific bucket
-// const s3Client = new S3Client({
-//   region: 'us-east-1',
-//   endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000', // MinIO server endpoint
-//   forcePathStyle: true, // Required for MinIO compatibility
-//   credentials: {
-//     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-//     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-//   }
-// })
+const s3Client = new S3Client({
+  region: 'us-east-1',
+  endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000', // MinIO server endpoint
+  forcePathStyle: true, // Required for MinIO compatibility
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+  }
+})
 
 // Default S3Client for backward compatibility
 
@@ -68,22 +67,23 @@ driveRoute.get(
       .from(foldersTable)
       .where(cwd ? eq(foldersTable.parentId, cwd) : isNull(foldersTable.parentId))
 
-    const filesAndFolders = Promise.all([files, folders]).then(([files, folders]) => {
-      return [...files, ...folders].sort((a, b) => {
-        switch (sort) {
-          case 'name':
-            return a.name.localeCompare(b.name)
-          // case 'size':
-          //   return a.size - b.size
-          case 'updated':
-            return a.updatedAt.getTime() - b.updatedAt.getTime()
-          case 'created':
-            return a.createdAt.getTime() - b.createdAt.getTime()
-          default:
-            return 0
-        }
-      })
-    })
+    const filesAndFolders = Promise.all([files, folders])
+    //   .then(([files, folders]) => {
+    //   return [...files, ...folders].sort((a, b) => {
+    //     switch (sort) {
+    //       case 'name':
+    //         return a.name.localeCompare(b.name)
+    //       // case 'size':
+    //       //   return a.size - b.size
+    //       case 'updated':
+    //         return a.updatedAt.getTime() - b.updatedAt.getTime()
+    //       case 'created':
+    //         return a.createdAt.getTime() - b.createdAt.getTime()
+    //       default:
+    //         return 0
+    //     }
+    //   })
+    // })
 
     return c.json(filesAndFolders)
   }
@@ -98,13 +98,13 @@ driveRoute.post(
     const { name } = c.req.valid('json')
     const { cwd } = c.req.valid('query')
 
-    await db.insert(foldersTable).values({
+    const newFolder = await db.insert(foldersTable).values({
       name,
       ownerId: 1,
       parentId: cwd
     })
 
-    return c.body(null, 201)
+    return c.json(newFolder, 201)
   }
 )
 
@@ -123,20 +123,21 @@ driveRoute.delete(
     const { recursive, version, file } = c.req.valid('json')
     const { cwd } = c.req.valid('query')
 
-    if (!cwd) {
-      return c.json({ error: 'pointer is required' }, 400)
-    }
-
     if (file) {
-      // check if its a version
-      if (version) {
-        //  delete version from s3
-        return
-      }
-
-      await db.delete(filesTable).where(eq(filesTable.id, file))
+      await s3Client
+        .send(
+          new DeleteObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: file
+          })
+        )
+        .then(() => db.delete(filesTable).where(eq(filesTable.id, file)))
 
       return c.body(null, 204)
+    }
+
+    if (!cwd) {
+      return c.json({ error: 'cwd is required' }, 400)
     }
 
     // check if its empty
@@ -172,25 +173,22 @@ driveRoute.delete(
     return c.body(null, 204)
   }
 )
-
+// touch would have to change
 driveRoute.post(
   '/touch',
   validator('json', z.object({ name: z.string().min(1).max(255) })),
   validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
-    const { name } = c.req.valid('json')
-    const { cwd } = c.req.valid('query')
-
-    await db.insert(filesTable).values({
-      name,
-      type: 'mp3',
-      key: crypto.randomUUID(),
-      size: 0,
-      parentFolder: cwd,
-      ownerId: 1
-    })
-
-    return c.body(null, 201)
+    // const { name } = c.req.valid('json')
+    // const { cwd } = c.req.valid('query')
+    // await db.insert(filesTable).values({
+    //   name,
+    //   type: 'mp3',
+    //   size: 0,
+    //   parentFolder: cwd,
+    //   ownerId: 1
+    // })
+    // return c.body(null, 201)
   }
 )
 
