@@ -48,13 +48,3 @@ export const filesTable = pgTable('files', {
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
-
-export const fileVersionsTable = pgTable('file_versions', {
-  id: serial().primaryKey(),
-  fileId: integer().references(() => filesTable.id, { onDelete: 'cascade' }),
-  version: integer().notNull(),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .$onUpdate(() => new Date()),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
