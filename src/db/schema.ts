@@ -1,4 +1,4 @@
-import { integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/pg-core'
+import { integer, pgTable, varchar, text, timestamp, serial, bigint } from 'drizzle-orm/pg-core'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
 // const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
@@ -38,7 +38,7 @@ export const filesTable = pgTable('files', {
   id: serial().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   key: varchar({ length: 64 }).notNull().unique(),
-  size: integer().notNull(),
+  size: bigint({ mode: 'number' }).notNull(),
   type: varchar({ length: 64 }).notNull(),
   parentFolder: integer().references(() => foldersTable.id, { onDelete: 'cascade' }),
   ownerId: integer()

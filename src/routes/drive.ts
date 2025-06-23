@@ -94,13 +94,16 @@ driveRoute.post(
     const { name } = c.req.valid('json')
     const { cwd } = c.req.valid('query')
 
-    await db.insert(foldersTable).values({
-      name,
-      ownerId: 1,
-      parentId: cwd
-    })
+    const [newFolder] = await db
+      .insert(foldersTable)
+      .values({
+        name,
+        ownerId: 1,
+        parentId: cwd
+      })
+      .returning()
 
-    return c.body(null, 201)
+    return c.json({ id: newFolder.id }, 201)
   }
 )
 
