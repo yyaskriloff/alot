@@ -1,13 +1,19 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
-import { PostHog } from 'posthog-node'
+import { cors } from 'hono/cors'
 import driveRoute from './routes/drive'
 
-const client = new PostHog('phc_kyRsR2QdYkqhrEldJKhnZbFe1Rrxk6pIn7kLDAkS8Bv', {
-  host: 'https://us.i.posthog.com'
-})
-
 const app = new Hono()
+
+app.use(
+  '*',
+  cors({
+    origin: ['http://localhost:5173'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  })
+)
 
 app.get('/', c => {
   return c.text('Hello Hono!')

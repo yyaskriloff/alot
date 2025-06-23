@@ -4,7 +4,7 @@ import { integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/
 // const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
 
 export const usersTable = pgTable('users', {
-  id: integer().primaryKey(),
+  id: serial().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull().unique()
 })
@@ -29,6 +29,7 @@ export const foldersTable = pgTable('folders', {
   parentId: integer(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
+    .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
@@ -45,6 +46,7 @@ export const filesTable = pgTable('files', {
     .notNull(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
+    .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })

@@ -58,32 +58,28 @@ driveRoute.get(
     const { cwd, sort } = c.req.valid('query')
     // get all files and folders in the path in one select statement
 
-    const files = db
-      .select()
-      .from(filesTable)
-      .where(cwd ? eq(filesTable.parentFolder, cwd) : isNull(filesTable.parentFolder))
-
-    const folders = db
-      .select()
-      .from(foldersTable)
-      .where(cwd ? eq(foldersTable.parentId, cwd) : isNull(foldersTable.parentId))
-
-    const filesAndFolders = Promise.all([files, folders]).then(([files, folders]) => {
-      return [...files, ...folders].sort((a, b) => {
-        switch (sort) {
-          case 'name':
-            return a.name.localeCompare(b.name)
-          // case 'size':
-          //   return a.size - b.size
-          case 'updated':
-            return a.updatedAt.getTime() - b.updatedAt.getTime()
-          case 'created':
-            return a.createdAt.getTime() - b.createdAt.getTime()
-          default:
-            return 0
-        }
-      })
-    })
+    const filesAndFolders = await unionAll(
+      db
+        .select({
+          id: filesTable.id,
+          name: filesTable.name,
+          type: filesTable.type,
+          size: filesTable.size,
+          modified: filesTable.updatedAt
+        })
+        .from(filesTable)
+        .where(cwd ? eq(filesTable.parentFolder, cwd) : isNull(filesTable.parentFolder)),
+      db
+        .select({
+          id: foldersTable.id,
+          name: foldersTable.name,
+          type: sql<string>`'folder'`,
+          size: sql<number>`0`,
+          modified: foldersTable.updatedAt
+        })
+        .from(foldersTable)
+        .where(cwd ? eq(foldersTable.parentId, cwd) : isNull(foldersTable.parentId))
+    )
 
     return c.json(filesAndFolders)
   }
@@ -123,10 +119,6 @@ driveRoute.delete(
     const { recursive, version, file } = c.req.valid('json')
     const { cwd } = c.req.valid('query')
 
-    if (!cwd) {
-      return c.json({ error: 'pointer is required' }, 400)
-    }
-
     if (file) {
       // check if its a version
       if (version) {
@@ -137,6 +129,9 @@ driveRoute.delete(
       await db.delete(filesTable).where(eq(filesTable.id, file))
 
       return c.body(null, 204)
+    }
+    if (!cwd) {
+      return c.json({ error: 'pointer is required' }, 400)
     }
 
     // check if its empty
