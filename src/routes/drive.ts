@@ -14,6 +14,7 @@ import { eq, isNull, sql, count, sum, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { zValidator as validator } from '@hono/zod-validator'
 import { unionAll } from 'drizzle-orm/pg-core'
+import mime from 'mime-types'
 
 // on create, file confirmation then db
 // on delete, db then file confirmation
@@ -176,19 +177,48 @@ driveRoute.delete(
 // touch would have to change
 driveRoute.post(
   '/touch',
-  validator('json', z.object({ name: z.string().min(1).max(255) })),
+  validator(
+    'json',
+    z.object({
+      name: z.string().min(1).max(255),
+      type: z.enum(['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/aac', 'audio/m4a'])
+    })
+  ),
   validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
-    // const { name } = c.req.valid('json')
-    // const { cwd } = c.req.valid('query')
-    // await db.insert(filesTable).values({
-    //   name,
-    //   type: 'mp3',
-    //   size: 0,
-    //   parentFolder: cwd,
-    //   ownerId: 1
-    // })
-    // return c.body(null, 201)
+    const { name, type } = c.req.valid('json')
+    const { cwd } = c.req.valid('query')
+
+    const extension = mime.extension(type)
+
+    if (!extension) {
+      return c.json({ error: 'Invalid file type' }, 400)
+    }
+
+    const [newFile] = await db
+      .insert(filesTable)
+      .values({
+        name,
+        type: 'mp3',
+        size: 0,
+        parentFolder: cwd,
+        ownerId: 1
+      })
+      .returning()
+
+    // generate a signed url for the file
+    const signedUrl = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({
+        Bucket: 'test',
+        Key: cwd ? `1/${cwd}/${newFile.id}.${extension}` : `1/${newFile.id}.${extension}`
+      })
+    )
+
+    return c.json({
+      file: newFile,
+      signedUrl
+    })
   }
 )
 
