@@ -5,7 +5,8 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   PutObjectCommand,
-  ListObjectVersionsCommand
+  ListObjectVersionsCommand,
+  GetObjectAttributesCommand
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import db from '../db'
@@ -15,10 +16,30 @@ import { z } from 'zod'
 import { zValidator as validator } from '@hono/zod-validator'
 import { unionAll } from 'drizzle-orm/pg-core'
 import mime from 'mime-types'
+import { v4 as uuid } from 'uuid'
 
 // on create, file confirmation then db
 // on delete, db then file confirmation
 
+const fileType = z.enum([
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
+  'audio/aac',
+  'audio/m4a',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/tiff',
+  'image/heic',
+  'image/heif',
+  'image/heif-sequence',
+  'image/heic-sequence'
+])
 // pointer to where the application is in the file system
 const cwd = (nullable: 'nullable' | 'required') =>
   nullable === 'nullable'
@@ -33,8 +54,8 @@ const s3Client = new S3Client({
   endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000', // MinIO server endpoint
   forcePathStyle: true, // Required for MinIO compatibility
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+    accessKeyId: 'admin',
+    secretAccessKey: 'password123'
   }
 })
 
@@ -123,14 +144,16 @@ driveRoute.delete(
     const { cwd } = c.req.valid('query')
 
     if (file) {
-      await s3Client
-        .send(
-          new DeleteObjectCommand({
-            Bucket: process.env.AWS_BUCKET_NAME,
-            Key: file
-          })
-        )
-        .then(() => db.delete(filesTable).where(eq(filesTable.id, file)))
+      const [deletedFile] = await db.delete(filesTable).where(eq(filesTable.id, file)).returning()
+
+      const key = `${deletedFile.id}.${mime.extension(deletedFile.type)}`
+
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: 'test',
+          Key: cwd ? `1/${cwd}/${key}` : `1/${key}`
+        })
+      )
 
       return c.body(null, 204)
     }
@@ -175,20 +198,20 @@ driveRoute.delete(
     return c.body(null, 204)
   }
 )
+
 // touch would have to change
-driveRoute.post(
+driveRoute.get(
   '/touch',
   validator(
-    'json',
+    'query',
     z.object({
-      name: z.string().min(1).max(255),
-      type: z.enum(['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/aac', 'audio/m4a'])
+      size: z.coerce.number(),
+      cwd: cwd('nullable'),
+      type: fileType
     })
   ),
-  validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
-    const { name, type } = c.req.valid('json')
-    const { cwd } = c.req.valid('query')
+    const { type, cwd, size } = c.req.valid('query')
 
     const extension = mime.extension(type)
 
@@ -196,30 +219,70 @@ driveRoute.post(
       return c.json({ error: 'Invalid file type' }, 400)
     }
 
+    const id = uuid()
+
+    // generate a signed url for the file
+    const signedUrl = await getSignedUrl(
+      s3Client,
+      new PutObjectCommand({
+        Bucket: 'test',
+        Key: cwd ? `1/${cwd}/${id}.${extension}` : `1/${id}.${extension}`,
+        ContentLength: size
+      }),
+      {
+        expiresIn: 60 * 5
+      }
+    )
+
+    return c.json({
+      key: `${id}.${extension}`,
+      signedUrl
+    })
+  }
+)
+
+driveRoute.post(
+  '/touch',
+  validator(
+    'json',
+    z.object({
+      name: z.string().min(1).max(255),
+      key: z.string().min(1).max(255),
+      type: fileType,
+      size: z.coerce.number()
+    })
+  ),
+  validator('query', z.object({ cwd: cwd('nullable') })),
+  async c => {
+    const { name, key, type, size } = c.req.valid('json')
+    const { cwd } = c.req.valid('query')
+
+    // validate file is in the s3 bucket
+    const { ObjectSize: fileSize } = await s3Client.send(
+      new GetObjectAttributesCommand({
+        Bucket: 'test',
+        Key: cwd ? `1/${cwd}/${key}` : `1/${key}`,
+        ObjectAttributes: ['ObjectSize']
+      })
+    )
+
+    if (fileSize !== size) {
+      return c.json({ error: 'File size does not match' }, 400)
+    }
+
     const [newFile] = await db
       .insert(filesTable)
       .values({
+        id: key.split('.')[0],
         name,
-        type: 'mp3',
-        size: 0,
+        type,
+        size: fileSize,
         parentFolder: cwd,
         ownerId: 1
       })
       .returning()
 
-    // generate a signed url for the file
-    const signedUrl = await getSignedUrl(
-      s3Client,
-      new GetObjectCommand({
-        Bucket: 'test',
-        Key: cwd ? `1/${cwd}/${newFile.id}.${extension}` : `1/${newFile.id}.${extension}`
-      })
-    )
-
-    return c.json({
-      file: newFile,
-      signedUrl
-    })
+    return c.json({ id: newFile.id }, 201)
   }
 )
 
