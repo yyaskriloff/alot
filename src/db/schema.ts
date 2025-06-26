@@ -1,10 +1,10 @@
-import { integer, pgTable, varchar, text, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import { integer, pgTable, varchar, text, timestamp, serial, bigint, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
 // const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
 
 export const usersTable = pgTable('users', {
-  id: integer().primaryKey(),
+  id: serial().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull().unique()
 })
@@ -29,6 +29,7 @@ export const foldersTable = pgTable('folders', {
   parentId: uuid().references((): AnyPgColumn => foldersTable.id, { onDelete: 'cascade' }),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
+    .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
@@ -44,6 +45,7 @@ export const filesTable = pgTable('files', {
     .notNull(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
+    .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })

@@ -8,11 +8,13 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "tsx src/server.js",
+    "dev": "tsx watch src/server.js",
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.832.0",
