@@ -1,42 +1,63 @@
 import { Hono } from 'hono'
-// import {
-//   S3Client,
-//   ListObjectsV2Command,
-//   GetObjectCommand,
-//   DeleteObjectCommand,
-//   PutObjectCommand,
-//   ListObjectVersionsCommand
-// } from '@aws-sdk/client-s3'
-// import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  PutObjectCommand,
+  ListObjectVersionsCommand,
+  GetObjectAttributesCommand
+} from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import db from '../db'
 import { filesTable, foldersTable } from '../db/schema'
-import { eq, isNull, sql, count, sum } from 'drizzle-orm'
+import { eq, isNull, sql, count, sum, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { zValidator as validator } from '@hono/zod-validator'
 import { unionAll } from 'drizzle-orm/pg-core'
+import mime from 'mime-types'
+import { v4 as uuid } from 'uuid'
 
 // on create, file confirmation then db
 // on delete, db then file confirmation
 
+const fileType = z.enum([
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
+  'audio/aac',
+  'audio/m4a',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/tiff',
+  'image/heic',
+  'image/heif',
+  'image/heif-sequence',
+  'image/heic-sequence'
+])
 // pointer to where the application is in the file system
 const cwd = (nullable: 'nullable' | 'required') =>
   nullable === 'nullable'
-    ? z.coerce
-        .number()
+    ? z
+        .string()
         .optional()
         .transform(val => val ?? null)
-    : z.coerce.number()
+    : z.string()
 
-// Function to create S3Client for a specific bucket
-// const s3Client = new S3Client({
-//   region: 'us-east-1',
-//   endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000', // MinIO server endpoint
-//   forcePathStyle: true, // Required for MinIO compatibility
-//   credentials: {
-//     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-//     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-//   }
-// })
+const s3Client = new S3Client({
+  region: 'us-east-1',
+  endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000', // MinIO server endpoint
+  forcePathStyle: true, // Required for MinIO compatibility
+  credentials: {
+    accessKeyId: 'admin',
+    secretAccessKey: 'password123'
+  }
+})
 
 // Default S3Client for backward compatibility
 
@@ -114,7 +135,7 @@ driveRoute.delete(
     z.object({
       recursive: z.boolean().optional().default(false),
       version: z.coerce.number().optional(),
-      file: z.coerce.number().optional()
+      file: z.string().optional()
     })
   ),
   validator('query', z.object({ cwd: cwd('nullable') })),
@@ -123,18 +144,25 @@ driveRoute.delete(
     const { cwd } = c.req.valid('query')
 
     if (file) {
-      // check if its a version
-      if (version) {
-        //  delete version from s3
-        return
-      }
+      const [deletedFile] = await db.delete(filesTable).where(eq(filesTable.id, file)).returning()
 
-      await db.delete(filesTable).where(eq(filesTable.id, file))
+      const key = `${deletedFile.id}.${mime.extension(deletedFile.type)}`
+
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: 'test',
+          Key: cwd ? `1/${cwd}/${key}` : `1/${key}`
+        })
+      )
 
       return c.body(null, 204)
     }
     if (!cwd) {
       return c.json({ error: 'pointer is required' }, 400)
+    }
+
+    if (!cwd) {
+      return c.json({ error: 'cwd is required' }, 400)
     }
 
     // check if its empty
@@ -171,24 +199,90 @@ driveRoute.delete(
   }
 )
 
+// touch would have to change
+driveRoute.get(
+  '/touch',
+  validator(
+    'query',
+    z.object({
+      size: z.coerce.number(),
+      cwd: cwd('nullable'),
+      type: fileType
+    })
+  ),
+  async c => {
+    const { type, cwd, size } = c.req.valid('query')
+
+    const extension = mime.extension(type)
+
+    if (!extension) {
+      return c.json({ error: 'Invalid file type' }, 400)
+    }
+
+    const id = uuid()
+
+    // generate a signed url for the file
+    const signedUrl = await getSignedUrl(
+      s3Client,
+      new PutObjectCommand({
+        Bucket: 'test',
+        Key: cwd ? `1/${cwd}/${id}.${extension}` : `1/${id}.${extension}`,
+        ContentLength: size
+      }),
+      {
+        expiresIn: 60 * 5
+      }
+    )
+
+    return c.json({
+      key: `${id}.${extension}`,
+      signedUrl
+    })
+  }
+)
+
 driveRoute.post(
   '/touch',
-  validator('json', z.object({ name: z.string().min(1).max(255) })),
+  validator(
+    'json',
+    z.object({
+      name: z.string().min(1).max(255),
+      key: z.string().min(1).max(255),
+      type: fileType,
+      size: z.coerce.number()
+    })
+  ),
   validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
-    const { name } = c.req.valid('json')
+    const { name, key, type, size } = c.req.valid('json')
     const { cwd } = c.req.valid('query')
 
-    await db.insert(filesTable).values({
-      name,
-      type: 'mp3',
-      key: crypto.randomUUID(),
-      size: 0,
-      parentFolder: cwd,
-      ownerId: 1
-    })
+    // validate file is in the s3 bucket
+    const { ObjectSize: fileSize } = await s3Client.send(
+      new GetObjectAttributesCommand({
+        Bucket: 'test',
+        Key: cwd ? `1/${cwd}/${key}` : `1/${key}`,
+        ObjectAttributes: ['ObjectSize']
+      })
+    )
 
-    return c.body(null, 201)
+    if (fileSize !== size) {
+      return c.json({ error: 'File size does not match' }, 400)
+    }
+
+    const [newFile] = await db
+      .insert(filesTable)
+      .values({
+        id: key.split('.')[0],
+        name,
+        type,
+        size: fileSize,
+        parentFolder: cwd,
+        ownerId: 1
+      })
+      .returning()
+
+    return c.json({ id: newFile.id }, 201)
   }
 )
 
@@ -197,7 +291,7 @@ driveRoute.get(
   validator(
     'query',
     z.object({
-      file: z.coerce.number().optional()
+      file: z.string().optional()
     })
   ),
   async c => {
@@ -210,7 +304,7 @@ driveRoute.get(
   validator(
     'query',
     z.object({
-      file: z.coerce.number(),
+      file: z.string(),
       cwd: cwd('nullable')
     })
   ),

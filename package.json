@@ -28,6 +28,7 @@
     "ejs": "^3.1.10",
     "express": "^5.1.0",
     "hono": "^4.7.11",
+    "mime-type": "^5.0.3",
     "pg": "^8.16.0",
     "posthog-node": "^5.0.0",
     "ssh2": "^1.16.0",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.2",
+    "@types/mime-types": "^3.0.1",
     "@types/node": "^22.15.21",
     "@types/pg": "^8.15.4",
     "@types/ssh2": "^1.15.5",
