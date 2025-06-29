@@ -133,27 +133,23 @@ driveRoute.delete(
   validator(
     'json',
     z.object({
-      recursive: z.boolean().optional().default(false),
       version: z.coerce.number().optional(),
       file: z.string().optional()
     })
   ),
   validator('query', z.object({ cwd: cwd('nullable') })),
   async c => {
-    const { recursive, version, file } = c.req.valid('json')
+    const { version, file } = c.req.valid('json')
     const { cwd } = c.req.valid('query')
 
     if (file) {
-      const [deletedFile] = await db.delete(filesTable).where(eq(filesTable.id, file)).returning()
-
-      const key = `${deletedFile.id}.${mime.extension(deletedFile.type)}`
-
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: 'test',
-          Key: cwd ? `1/${cwd}/${key}` : `1/${key}`
+      await db
+        .update(filesTable)
+        .set({
+          trash: true
         })
-      )
+        .where(eq(filesTable.id, file))
+        .returning()
 
       return c.body(null, 204)
     }
@@ -165,35 +161,7 @@ driveRoute.delete(
       return c.json({ error: 'cwd is required' }, 400)
     }
 
-    // check if its empty
-    const isEmpty = await unionAll(
-      db.select({ id: filesTable.id }).from(filesTable).where(eq(filesTable.parentFolder, cwd)).limit(1),
-      db.select({ id: foldersTable.id }).from(foldersTable).where(eq(foldersTable.parentId, cwd)).limit(1)
-    ).then(r => r.length === 0)
-
-    if (!isEmpty && !recursive) {
-      return c.json({ error: 'Folder is not empty' }, 409)
-    }
-
-    if (recursive) {
-      await db.execute(sql`
-        WITH RECURSIVE subfolders AS (
-          SELECT id FROM ${foldersTable} WHERE id = ${cwd}
-          UNION ALL
-          SELECT f.id
-          FROM ${foldersTable} f
-          JOIN subfolders sf ON f."parentId" = sf.id
-        ),
-        deleted_files AS (
-          DELETE FROM ${filesTable}
-          WHERE "parentFolder" IN (SELECT id FROM subfolders)
-        )
-        DELETE FROM ${foldersTable}
-        WHERE id IN (SELECT id FROM subfolders)
-      `)
-    } else {
-      await db.delete(foldersTable).where(eq(foldersTable.id, cwd))
-    }
+    await db.update(foldersTable).set({ trash: true }).where(eq(foldersTable.id, cwd))
 
     return c.body(null, 204)
   }
@@ -332,6 +300,103 @@ driveRoute.get(
       .where(cwd ? eq(foldersTable.id, cwd) : isNull(foldersTable.id))
 
     return c.json(folderStats)
+  }
+)
+
+driveRoute.get('/trash', async c => {
+  const filesAndFolders = await unionAll(
+    db
+      .select({
+        id: filesTable.id,
+        name: filesTable.name,
+        type: filesTable.type,
+        size: filesTable.size,
+        modified: filesTable.updatedAt
+      })
+      .from(filesTable)
+      .where(eq(filesTable.trash, true)),
+    db
+      .select({
+        id: foldersTable.id,
+        name: foldersTable.name,
+        type: sql<string>`'folder'`,
+        size: sql<number>`0`,
+        modified: foldersTable.updatedAt
+      })
+      .from(foldersTable)
+      .where(eq(filesTable.trash, true))
+  )
+
+  return c.json(filesAndFolders)
+})
+
+driveRoute.delete(
+  '/trash',
+  validator(
+    'json',
+    z.object({
+      file: z.string().optional(),
+      folder: z.string().optional()
+    })
+  ),
+  async c => {
+    const { file, folder } = c.req.valid('json')
+
+    if (file && folder) {
+      return c.json({ error: 'Must provide either file or folder' }, 400)
+    }
+
+    if (file) {
+      await db.update(filesTable).set({ trash: false, delete: new Date() }).where(eq(filesTable.id, file))
+    }
+
+    if (folder) {
+      await db.update(foldersTable).set({ trash: false, delete: new Date() }).where(eq(foldersTable.id, folder))
+      await db.update(filesTable).set({ trash: false, delete: new Date() }).where(eq(filesTable.parentFolder, folder))
+    }
+
+    const foldersInTrash = await db
+      .update(foldersTable)
+      .set({ trash: false, delete: new Date() })
+      .returning()
+      .then(folders => folders.map(folder => folder.id))
+
+    await db
+      .update(filesTable)
+      .set({ trash: false, delete: new Date() })
+      .where(inArray(filesTable.parentFolder, foldersInTrash))
+
+    await db.update(filesTable).set({ trash: false, delete: new Date() }).where(eq(filesTable.trash, true))
+
+    return c.body(null, 204)
+  }
+)
+
+driveRoute.put(
+  '/restore',
+  validator(
+    'json',
+    z.object({
+      file: z.string().optional(),
+      folder: z.string().optional() // either file or folder must be provided
+    })
+  ),
+  async c => {
+    const { file, folder } = c.req.valid('json')
+
+    if (file && folder) {
+      return c.json({ error: 'Must provide either file or folder' }, 400)
+    }
+
+    if (file) {
+      await db.update(filesTable).set({ trash: false, delete: null }).where(eq(filesTable.id, file))
+    }
+
+    if (folder) {
+      await db.update(foldersTable).set({ trash: false, delete: null }).where(eq(foldersTable.id, folder))
+    }
+
+    return c.body(null, 204)
   }
 )
 
