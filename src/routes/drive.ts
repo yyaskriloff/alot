@@ -368,7 +368,35 @@ driveRoute.delete(
 
     await db.update(filesTable).set({ trash: false, delete: new Date() }).where(eq(filesTable.trash, true))
 
-    return c.json({ success: true })
+    return c.body(null, 204)
+  }
+)
+
+driveRoute.put(
+  '/restore',
+  validator(
+    'json',
+    z.object({
+      file: z.string().optional(),
+      folder: z.string().optional() // either file or folder must be provided
+    })
+  ),
+  async c => {
+    const { file, folder } = c.req.valid('json')
+
+    if (file && folder) {
+      return c.json({ error: 'Must provide either file or folder' }, 400)
+    }
+
+    if (file) {
+      await db.update(filesTable).set({ trash: false, delete: null }).where(eq(filesTable.id, file))
+    }
+
+    if (folder) {
+      await db.update(foldersTable).set({ trash: false, delete: null }).where(eq(foldersTable.id, folder))
+    }
+
+    return c.body(null, 204)
   }
 )
 
