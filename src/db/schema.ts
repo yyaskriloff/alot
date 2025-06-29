@@ -7,6 +7,7 @@ import {
   serial,
   boolean,
   uuid,
+  date,
   type AnyPgColumn
 } from 'drizzle-orm/pg-core'
 
@@ -38,6 +39,7 @@ export const foldersTable = pgTable('folders', {
     .references(() => usersTable.id, { onDelete: 'cascade' }),
   parentId: uuid().references((): AnyPgColumn => foldersTable.id, { onDelete: 'cascade' }),
   trash: boolean().notNull().default(false),
+  delete: date({ mode: 'date' }),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
     .defaultNow()
@@ -51,6 +53,7 @@ export const filesTable = pgTable('files', {
   size: integer().notNull(),
   type: varchar({ length: 64 }).notNull(),
   trash: boolean().notNull().default(false),
+  delete: date({ mode: 'date' }),
   parentFolder: uuid().references(() => foldersTable.id, { onDelete: 'cascade' }),
   ownerId: integer()
     .references(() => usersTable.id, { onDelete: 'cascade' })
