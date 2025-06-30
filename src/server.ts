@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import driveRoute from './routes/drive'
 import settingsRoute from './routes/settings'
 import { clerkMiddleware, getAuth } from '@hono/clerk-auth'
+import db from './db'
 
 const app = new Hono()
 
@@ -26,13 +27,14 @@ app.use('*', clerkMiddleware())
 app.get('/me', async c => {
   const auth = getAuth(c)
 
-  if (!auth) {
+  if (!auth || !auth.userId) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
+  const user = await db.query.usersTable.findFirst({
+    where: (usersTable, { eq }) => eq(usersTable.clerkId, auth.userId)
+  })
 
-  console.log({ auth })
-
-  return c.json({ userId: auth.userId })
+  return c.json(user)
 })
 
 app.route('/drive', driveRoute)
