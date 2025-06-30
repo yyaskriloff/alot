@@ -2,6 +2,8 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import driveRoute from './routes/drive'
+import settingsRoute from './routes/settings'
+import { clerkMiddleware } from '@hono/clerk-auth'
 
 const app = new Hono()
 
@@ -19,7 +21,10 @@ app.get('/', c => {
   return c.text('Hello Hono!')
 })
 
+app.use('*', clerkMiddleware())
+
 app.route('/drive', driveRoute)
+app.route('/settings', settingsRoute)
 
 serve(
   {
