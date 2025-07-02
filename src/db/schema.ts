@@ -8,11 +8,26 @@ import {
   boolean,
   uuid,
   date,
+  pgEnum,
+  jsonb,
   type AnyPgColumn
 } from 'drizzle-orm/pg-core'
+import { json } from 'stream/consumers'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
 // const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
+
+export const socialPlatforms = pgEnum('social_platforms', [
+  'facebook',
+  'instagram',
+  'google',
+  'linkedin',
+  'dropbox',
+  'tiktok',
+  'x',
+  'threads',
+  'youtube'
+])
 
 export const usersTable = pgTable('users', {
   id: serial().primaryKey(),
@@ -65,4 +80,52 @@ export const filesTable = pgTable('files', {
     .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
+})
+
+export const socialTokensTable = pgTable('social_tokens', {
+  token: varchar({ length: 512 }).notNull(),
+  refreshToken: varchar({ length: 512 }).notNull(),
+  expiresAt: timestamp({ mode: 'date' }).notNull(),
+  platform: socialPlatforms().notNull(),
+  userId: integer()
+    .references(() => usersTable.id, { onDelete: 'cascade' })
+    .notNull(),
+  updatedAt: timestamp({ mode: 'date' })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
+})
+
+export const socialPostsTable = pgTable('social_posts', {
+  id: uuid().defaultRandom().primaryKey(),
+  socialId: varchar({ length: 255 }).notNull(),
+  content: jsonb().notNull(),
+  platform: socialPlatforms().notNull(),
+  draft: boolean().notNull().default(false),
+  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp({ mode: 'date' })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  contentContainer: varchar({ length: 255 }).notNull(),
+  userId: integer()
+    .references(() => usersTable.id, { onDelete: 'cascade' })
+    .notNull()
+})
+
+export const scheduledSocialPostsTable = pgTable('scheduled_social_posts', {
+  id: uuid().defaultRandom().primaryKey(),
+  content: jsonb().notNull(),
+  platform: socialPlatforms().notNull(),
+  scheduledAt: timestamp({ mode: 'date' }),
+  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp({ mode: 'date' })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  contentContainer: varchar({ length: 255 }).notNull(),
+  userId: integer()
+    .references(() => usersTable.id, { onDelete: 'cascade' })
+    .notNull()
 })
