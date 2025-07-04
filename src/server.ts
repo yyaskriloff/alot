@@ -6,6 +6,7 @@ import settingsRoute from './routes/settings'
 import { clerkMiddleware, getAuth } from '@hono/clerk-auth'
 import db from './db'
 import driveRoute from './routes/drive'
+import { getUser } from './middlleware'
 
 const app = new Hono()
 
@@ -39,9 +40,10 @@ app.get('/me', async c => {
 })
 
 // app.route('/account')
-app.route('drive/', driveRoute)
-app.route('drive/:driveId/storage', storageRoute)
-app.route('drive/:driveId/settings', settingsRoute)
+app.use('/drives/*', getUser)
+app.route('/drives', driveRoute)
+app.route('/drives/:driveId/storage', storageRoute)
+app.route('/drives/:driveId/settings', settingsRoute)
 
 serve(
   {

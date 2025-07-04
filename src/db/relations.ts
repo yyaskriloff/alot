@@ -1,27 +1,27 @@
 import { relations } from 'drizzle-orm'
-import { usersTable, orgsTable, driveTable } from './schema'
+import { usersTable, orgsTable, drivesTable } from './schema'
 
 export const userRelations = relations(usersTable, ({ one }) => ({
-  drive: one(driveTable, {
+  drive: one(drivesTable, {
     fields: [usersTable.id],
-    references: [driveTable.id]
+    references: [drivesTable.id]
   })
 }))
 
-export const driveRelations = relations(driveTable, ({ one }) => ({
+export const driveRelations = relations(drivesTable, ({ one }) => ({
   user: one(usersTable, {
-    fields: [driveTable.ownerId],
+    fields: [drivesTable.ownerId],
     references: [usersTable.id]
   }),
   org: one(orgsTable, {
-    fields: [driveTable.ownerId],
+    fields: [drivesTable.ownerId],
     references: [orgsTable.id]
   })
 }))
 
 export const orgRelations = relations(orgsTable, ({ one }) => ({
-  drive: one(driveTable, {
+  drive: one(drivesTable, {
     fields: [orgsTable.id],
-    references: [driveTable.id]
+    references: [drivesTable.id]
   })
 }))

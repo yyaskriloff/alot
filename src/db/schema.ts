@@ -52,7 +52,7 @@ export const orgsTable = pgTable('organizations', {
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
 
-export const driveTable = pgTable('drive', {
+export const drivesTable = pgTable('drives', {
   id: uuid().defaultRandom().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 255 }),
@@ -70,7 +70,7 @@ export const foldersTable = pgTable('folders', {
   name: varchar({ length: 255 }).notNull(),
   driveId: uuid()
     .notNull()
-    .references(() => driveTable.id, { onDelete: 'cascade' }),
+    .references(() => drivesTable.id, { onDelete: 'cascade' }),
   parentId: uuid().references((): AnyPgColumn => foldersTable.id, { onDelete: 'cascade' }),
   trash: boolean().notNull().default(false),
   delete: date({ mode: 'date' }),
@@ -90,7 +90,7 @@ export const filesTable = pgTable('files', {
   delete: date({ mode: 'date' }),
   parentFolder: uuid().references(() => foldersTable.id, { onDelete: 'cascade' }),
   driveId: uuid()
-    .references(() => driveTable.id, { onDelete: 'cascade' })
+    .references(() => drivesTable.id, { onDelete: 'cascade' })
     .notNull(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
@@ -108,7 +108,7 @@ export const subscriptionTable = pgTable('subscription', {
   startDate: timestamp({ mode: 'date' }).notNull(),
   endDate: timestamp({ mode: 'date' }).notNull(),
   driveId: uuid()
-    .references(() => driveTable.id, { onDelete: 'cascade' })
+    .references(() => drivesTable.id, { onDelete: 'cascade' })
     .notNull()
     .unique(),
   updatedAt: timestamp({ mode: 'date' })
