@@ -33,7 +33,7 @@ export const driveType = pgEnum('drive_type', ['personal', 'organization'])
 export const subscriptionStatus = pgEnum('subscription_status', ['active', 'inactive', 'expired'])
 
 export const usersTable = pgTable('users', {
-  id: serial().primaryKey(),
+  id: uuid().defaultRandom().primaryKey(),
   firstName: varchar({ length: 255 }).notNull(),
   lastName: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull().unique(),
@@ -57,29 +57,12 @@ export const driveTable = pgTable('drive', {
   name: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 255 }),
   type: driveType().notNull().default('personal'),
+  ownerId: uuid(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
-
-export const userDriveTable = pgTable('user_drive', {
-  userId: integer()
-    .notNull()
-    .references(() => usersTable.id, { onDelete: 'cascade' }),
-  driveId: uuid()
-    .notNull()
-    .references(() => driveTable.id, { onDelete: 'cascade' })
-})
-
-export const orgDriveTable = pgTable('org_drive', {
-  orgId: integer()
-    .notNull()
-    .references(() => orgsTable.id, { onDelete: 'cascade' }),
-  driveId: uuid()
-    .notNull()
-    .references(() => driveTable.id, { onDelete: 'cascade' })
 })
 
 export const foldersTable = pgTable('folders', {

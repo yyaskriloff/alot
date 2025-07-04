@@ -1,10 +1,11 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import driveRoute from './routes/drive'
+import storageRoute from './routes/storage'
 import settingsRoute from './routes/settings'
 import { clerkMiddleware, getAuth } from '@hono/clerk-auth'
 import db from './db'
+import driveRoute from './routes/drive'
 
 const app = new Hono()
 
@@ -37,8 +38,10 @@ app.get('/me', async c => {
   return c.json(user)
 })
 
-app.route('/drive', driveRoute)
-app.route('/settings', settingsRoute)
+// app.route('/account')
+app.route('drive/', driveRoute)
+app.route('drive/:driveId/storage', storageRoute)
+app.route('drive/:driveId/settings', settingsRoute)
 
 serve(
   {
