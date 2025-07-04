@@ -9,10 +9,9 @@ import {
   uuid,
   date,
   pgEnum,
-  jsonb,
+  char,
   type AnyPgColumn
 } from 'drizzle-orm/pg-core'
-import { json } from 'stream/consumers'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
 // const status = pgEnum('status', ['waiting', 'proccessing', 'archived', 'error'])
@@ -29,6 +28,10 @@ export const socialPlatforms = pgEnum('social_platforms', [
   'youtube'
 ])
 
+export const driveType = pgEnum('drive_type', ['personal', 'organization'])
+
+export const subscriptionStatus = pgEnum('subscription_status', ['active', 'inactive', 'expired'])
+
 export const usersTable = pgTable('users', {
   id: serial().primaryKey(),
   firstName: varchar({ length: 255 }).notNull(),
@@ -38,6 +41,7 @@ export const usersTable = pgTable('users', {
 })
 
 export const orgsTable = pgTable('organizations', {
+  id: uuid().defaultRandom().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
   bio: text().notNull(),
   doi: timestamp('date_of_incorporation', { mode: 'date' }).notNull(),
@@ -48,12 +52,42 @@ export const orgsTable = pgTable('organizations', {
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
 
+export const driveTable = pgTable('drive', {
+  id: uuid().defaultRandom().primaryKey(),
+  name: varchar({ length: 255 }).notNull(),
+  description: varchar({ length: 255 }),
+  type: driveType().notNull().default('personal'),
+  updatedAt: timestamp({ mode: 'date' })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
+})
+
+export const userDriveTable = pgTable('user_drive', {
+  userId: integer()
+    .notNull()
+    .references(() => usersTable.id, { onDelete: 'cascade' }),
+  driveId: uuid()
+    .notNull()
+    .references(() => driveTable.id, { onDelete: 'cascade' })
+})
+
+export const orgDriveTable = pgTable('org_drive', {
+  orgId: integer()
+    .notNull()
+    .references(() => orgsTable.id, { onDelete: 'cascade' }),
+  driveId: uuid()
+    .notNull()
+    .references(() => driveTable.id, { onDelete: 'cascade' })
+})
+
 export const foldersTable = pgTable('folders', {
   id: uuid().defaultRandom().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
-  ownerId: integer()
+  driveId: uuid()
     .notNull()
-    .references(() => usersTable.id, { onDelete: 'cascade' }),
+    .references(() => driveTable.id, { onDelete: 'cascade' }),
   parentId: uuid().references((): AnyPgColumn => foldersTable.id, { onDelete: 'cascade' }),
   trash: boolean().notNull().default(false),
   delete: date({ mode: 'date' }),
@@ -72,8 +106,8 @@ export const filesTable = pgTable('files', {
   trash: boolean().notNull().default(false),
   delete: date({ mode: 'date' }),
   parentFolder: uuid().references(() => foldersTable.id, { onDelete: 'cascade' }),
-  ownerId: integer()
-    .references(() => usersTable.id, { onDelete: 'cascade' })
+  driveId: uuid()
+    .references(() => driveTable.id, { onDelete: 'cascade' })
     .notNull(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
@@ -82,50 +116,21 @@ export const filesTable = pgTable('files', {
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
 })
 
-export const socialTokensTable = pgTable('social_tokens', {
-  token: varchar({ length: 512 }).notNull(),
-  refreshToken: varchar({ length: 512 }).notNull(),
-  expiresAt: timestamp({ mode: 'date' }).notNull(),
-  platform: socialPlatforms().notNull(),
-  userId: integer()
-    .references(() => usersTable.id, { onDelete: 'cascade' })
-    .notNull(),
+export const subscriptionTable = pgTable('subscription', {
+  id: varchar({ length: 64 }).notNull().primaryKey(),
+  type: driveType(),
+  paymentMethod: varchar({ length: 64 }).notNull(),
+  last4: char({ length: 4 }).notNull(),
+  status: subscriptionStatus().notNull().default('active'),
+  startDate: timestamp({ mode: 'date' }).notNull(),
+  endDate: timestamp({ mode: 'date' }).notNull(),
+  driveId: uuid()
+    .references(() => driveTable.id, { onDelete: 'cascade' })
+    .notNull()
+    .unique(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
   createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
-
-export const socialPostsTable = pgTable('social_posts', {
-  id: uuid().defaultRandom().primaryKey(),
-  socialId: varchar({ length: 255 }).notNull(),
-  content: jsonb().notNull(),
-  platform: socialPlatforms().notNull(),
-  draft: boolean().notNull().default(false),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  contentContainer: varchar({ length: 255 }).notNull(),
-  userId: integer()
-    .references(() => usersTable.id, { onDelete: 'cascade' })
-    .notNull()
-})
-
-export const scheduledSocialPostsTable = pgTable('scheduled_social_posts', {
-  id: uuid().defaultRandom().primaryKey(),
-  content: jsonb().notNull(),
-  platform: socialPlatforms().notNull(),
-  scheduledAt: timestamp({ mode: 'date' }),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  contentContainer: varchar({ length: 255 }).notNull(),
-  userId: integer()
-    .references(() => usersTable.id, { onDelete: 'cascade' })
-    .notNull()
 })

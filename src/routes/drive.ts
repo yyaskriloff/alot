@@ -1,13 +1,5 @@
 import { Hono } from 'hono'
-import {
-  S3Client,
-  ListObjectsV2Command,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  PutObjectCommand,
-  ListObjectVersionsCommand,
-  GetObjectAttributesCommand
-} from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectAttributesCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import db from '../db'
 import { filesTable, foldersTable } from '../db/schema'
@@ -65,7 +57,7 @@ const driveRoute = new Hono()
 
 // list files
 driveRoute.get(
-  '/ls',
+  '/:ls',
   validator(
     'query',
     z.object({
