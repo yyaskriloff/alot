@@ -10,7 +10,8 @@ import {
   date,
   pgEnum,
   char,
-  type AnyPgColumn
+  type AnyPgColumn,
+  bigint
 } from 'drizzle-orm/pg-core'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
@@ -32,6 +33,8 @@ export const driveType = pgEnum('drive_type', ['personal', 'organization'])
 
 export const subscriptionStatus = pgEnum('subscription_status', ['active', 'inactive', 'expired'])
 
+export const region = pgEnum('region', ['us', 'eu', 'is'])
+
 export const usersTable = pgTable('users', {
   id: uuid().defaultRandom().primaryKey(),
   firstName: varchar({ length: 255 }).notNull(),
@@ -43,6 +46,7 @@ export const usersTable = pgTable('users', {
 export const orgsTable = pgTable('organizations', {
   id: uuid().defaultRandom().primaryKey(),
   name: varchar({ length: 255 }).notNull(),
+  slug: varchar({ length: 255 }).notNull().unique(),
   bio: text().notNull(),
   doi: timestamp('date_of_incorporation', { mode: 'date' }).notNull(),
   updatedAt: timestamp({ mode: 'date' })
@@ -54,9 +58,14 @@ export const orgsTable = pgTable('organizations', {
 
 export const drivesTable = pgTable('drives', {
   id: uuid().defaultRandom().primaryKey(),
-  name: varchar({ length: 255 }).notNull(),
-  description: varchar({ length: 255 }),
   type: driveType().notNull().default('personal'),
+  storageUsed: bigint({ mode: 'number' })
+    .notNull()
+    .$default(() => 0),
+  storageLimit: bigint({ mode: 'number' })
+    .notNull()
+    .$default(() => 1024 * 1024 * 1024 * 20),
+  region: region().notNull().default('us'),
   ownerId: uuid(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
