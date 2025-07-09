@@ -4,6 +4,8 @@ import { eq } from 'drizzle-orm'
 import { zValidator as validator } from '@hono/zod-validator'
 import { z } from 'zod/v4'
 import { clerkClient } from '../lib/clerk'
+import { getDriveContext } from '../middlleware'
+import { Permissions } from '../lib/utils'
 
 const driveRoute = new Hono()
 
@@ -100,23 +102,25 @@ driveRoute.post(
   }
 )
 
-driveRoute.get('/:id', async c => {
+driveRoute.get('/:id', getDriveContext(), async c => {
+  const drive = c.get('drive')
+
+  return c.json(drive)
+})
+
+driveRoute.put('/:id', getDriveContext(Permissions.MANAGE_DRIVE), async c => {
   const user = c.get('user')
 })
 
-driveRoute.put('/:id', async c => {
+driveRoute.delete('/:id', getDriveContext(Permissions.DELETE_DRIVE), async c => {
   const user = c.get('user')
 })
 
-driveRoute.delete('/:id', async c => {
+driveRoute.put('/:id/detach', getDriveContext(Permissions.DELETE_DRIVE), async c => {
   const user = c.get('user')
 })
 
-driveRoute.put('/:id/detach', async c => {
-  const user = c.get('user')
-})
-
-driveRoute.put('/:id/attach', async c => {
+driveRoute.put('/:id/attach', getDriveContext(Permissions.DELETE_DRIVE), async c => {
   const user = c.get('user')
 })
 

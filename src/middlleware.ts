@@ -3,6 +3,7 @@ import { getAuth } from '@hono/clerk-auth'
 import { getClerkUser, clerkClient } from './lib/clerk'
 import db from './db'
 import { userCache, driveCache, orgCache } from './lib/cache'
+import { Permissions } from './lib/utils'
 
 export const getUser = createMiddleware(async (c, next) => {
   const auth = getAuth(c)
@@ -53,7 +54,7 @@ export const getUser = createMiddleware(async (c, next) => {
   await next()
 })
 
-export const getDriveContext = (...permissionsNeeded: string[]) =>
+export const getDriveContext = (...permissionsNeeded: Permissions[]) =>
   createMiddleware(async (c, next) => {
     const driveId = c.req.query('id')
     const user = c.get('user')
