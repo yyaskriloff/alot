@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
-import db, { drivesTable, region, orgsTable } from '../db'
+import db, { drivesTable, region, orgsTable, usersTable } from '../db'
 import { eq } from 'drizzle-orm'
 import { zValidator as validator } from '@hono/zod-validator'
 import { z } from 'zod/v4'
 import { clerkClient } from '../lib/clerk'
 import { getDriveContext } from '../middlleware'
 import { Permissions } from '../lib/utils'
+import { getAuth } from '@hono/clerk-auth'
 
 const driveRoute = new Hono()
 
@@ -102,26 +103,103 @@ driveRoute.post(
   }
 )
 
-driveRoute.get('/:id', getDriveContext(), async c => {
+driveRoute.get('/:driveId', getDriveContext(), async c => {
   const drive = c.get('drive')
 
   return c.json(drive)
 })
 
-driveRoute.put('/:id', getDriveContext(Permissions.MANAGE_DRIVE), async c => {
+driveRoute.put('/:driveId', getDriveContext(Permissions.MANAGE_DRIVE), async c => {
   const user = c.get('user')
 })
 
-driveRoute.delete('/:id', getDriveContext(Permissions.DELETE_DRIVE), async c => {
+driveRoute.delete('/:driveId', getDriveContext(Permissions.DELETE_DRIVE), async c => {
+  const drive = c.get('drive')
+
+  await db
+    .update(drivesTable)
+    .set({
+      ownerId: null,
+      deleted: true
+    })
+    .where(eq(drivesTable.id, drive.id))
+
+  return c.body(null, 204)
+})
+
+driveRoute.put('/:driveId/detach', getDriveContext(Permissions.DELETE_DRIVE), async c => {
+  const drive = c.get('drive')
+
+  await db
+    .update(drivesTable)
+    .set({
+      ownerId: null
+    })
+    .where(eq(drivesTable.id, drive.id))
+
+  return c.body(null, 204)
+})
+
+driveRoute.put('/:driveId/attach', getDriveContext(Permissions.DELETE_DRIVE), async c => {
   const user = c.get('user')
 })
 
-driveRoute.put('/:id/detach', getDriveContext(Permissions.DELETE_DRIVE), async c => {
+driveRoute.get('/:driveId/members', getDriveContext(Permissions.READ_MEMBERS), async c => {
   const user = c.get('user')
 })
 
-driveRoute.put('/:id/attach', getDriveContext(Permissions.DELETE_DRIVE), async c => {
-  const user = c.get('user')
-})
+driveRoute.put(
+  '/:driveId/members',
+  validator('json', z.object({ email: z.email(), role: z.string() })),
+  getDriveContext(Permissions.MANAGE_MEMBERS),
+  async c => {
+    const orgId = getAuth(c)?.orgId
+
+    if (!orgId) {
+      return c.json({ error: 'Organization not found' }, 404)
+    }
+
+    const { email, role } = c.req.valid('json')
+
+    await clerkClient.organizations.createOrganizationInvitation({
+      organizationId: orgId,
+      emailAddress: email,
+      role
+    })
+
+    return c.body(null, 204)
+  }
+)
+
+driveRoute.delete(
+  '/:driveId/members',
+  validator('json', z.object({ email: z.email() })),
+  getDriveContext(Permissions.MANAGE_MEMBERS),
+  async c => {
+    const orgId = getAuth(c)?.orgId
+
+    if (!orgId) {
+      return c.json({ error: 'Organization not found' }, 404)
+    }
+
+    const userToRemove = await db.query.usersTable.findFirst({
+      where: eq(usersTable.email, c.req.valid('json').email),
+      columns: {
+        clerkId: true
+      }
+    })
+
+    if (!userToRemove) {
+      return c.json({ error: 'User not found' }, 404)
+    }
+
+    await clerkClient.organizations.deleteOrganizationMembership({
+      organizationId: orgId,
+      userId: userToRemove.clerkId
+    })
+
+    return c.body(null, 204)
+  }
+)
 
 export default driveRoute

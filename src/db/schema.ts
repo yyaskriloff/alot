@@ -12,7 +12,8 @@ import {
   char,
   type AnyPgColumn,
   bigint,
-  uniqueIndex
+  uniqueIndex,
+  primaryKey
 } from 'drizzle-orm/pg-core'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
@@ -72,7 +73,8 @@ export const drivesTable = pgTable('drives', {
     .notNull()
     .$default(() => 1024 * 1024 * 1024 * 20),
   region: region().notNull().default('us'),
-  ownerId: uuid().unique().notNull(),
+  ownerId: uuid().unique(),
+  deleted: boolean().notNull().default(false),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
     .defaultNow()

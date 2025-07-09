@@ -56,7 +56,7 @@ export const getUser = createMiddleware(async (c, next) => {
 
 export const getDriveContext = (...permissionsNeeded: Permissions[]) =>
   createMiddleware(async (c, next) => {
-    const driveId = c.req.query('id')
+    const driveId = c.req.param('driveId') || c.req.query('driveId')
     const user = c.get('user')
 
     if (!driveId) {
