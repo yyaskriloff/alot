@@ -11,7 +11,8 @@ import {
   pgEnum,
   char,
   type AnyPgColumn,
-  bigint
+  bigint,
+  uniqueIndex
 } from 'drizzle-orm/pg-core'
 
 // const titleEnum = pgEnum('title', ['Rabbi', 'Reb', 'Rebbetzin', 'Rav', 'Dr'])
@@ -43,18 +44,23 @@ export const usersTable = pgTable('users', {
   clerkId: varchar({ length: 255 }).notNull().unique()
 })
 
-export const orgsTable = pgTable('organizations', {
-  id: uuid().defaultRandom().primaryKey(),
-  name: varchar({ length: 255 }).notNull(),
-  slug: varchar({ length: 255 }).notNull().unique(),
-  bio: text().notNull(),
-  doi: timestamp('date_of_incorporation', { mode: 'date' }).notNull(),
-  updatedAt: timestamp({ mode: 'date' })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
-})
+export const orgsTable = pgTable(
+  'organizations',
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    name: varchar({ length: 255 }).notNull(),
+    slug: varchar({ length: 255 }).notNull().unique(),
+    clerkId: varchar({ length: 255 }).notNull().unique(),
+    bio: text(),
+    doi: timestamp('date_of_incorporation', { mode: 'date' }),
+    updatedAt: timestamp({ mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    createdAt: timestamp({ mode: 'date' }).notNull().defaultNow()
+  },
+  table => [uniqueIndex('org_slug').on(table.slug), uniqueIndex('org_clerk_id').on(table.clerkId)]
+)
 
 export const drivesTable = pgTable('drives', {
   id: uuid().defaultRandom().primaryKey(),
@@ -66,7 +72,7 @@ export const drivesTable = pgTable('drives', {
     .notNull()
     .$default(() => 1024 * 1024 * 1024 * 20),
   region: region().notNull().default('us'),
-  ownerId: uuid(),
+  ownerId: uuid().unique().notNull(),
   updatedAt: timestamp({ mode: 'date' })
     .notNull()
     .defaultNow()
